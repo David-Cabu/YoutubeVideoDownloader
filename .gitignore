@@ -1,0 +1,25 @@
+# .NET Core
+bin/
+obj/
+
+# Custom build outputs
+Release-Linux-SingleFile/
+YoutubeVideoDownloaderLog.txt
+csharpLog.txt
+
+# Python
+__pycache__/
+*.pyc
+
+# IDEs
+.idea/
+.vscode/
+*.user
+*.suo
+
+# OS generated files
+.DS_Store
+Thumbs.db
+publish/
+**/publish/
+publish/

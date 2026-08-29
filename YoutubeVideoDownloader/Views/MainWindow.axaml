@@ -1,0 +1,76 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:YoutubeVideoDownloader.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        x:Class="YoutubeVideoDownloader.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Icon="/Assets/favicon.ico"
+        Title="Youtube Video Downloader">
+
+    <Design.DataContext>
+        <!-- This only sets the DataContext for the previewer in an IDE,
+             to set the actual DataContext for runtime, set the DataContext property in code (look at App.axaml.cs) -->
+        <vm:MainViewModel />
+    </Design.DataContext>
+    <Grid Margin="5" RowDefinitions="*, Auto">
+        <StackPanel Grid.Row="0" Margin="20" Spacing="10">
+            
+            <TextBlock  Text="Seleziona un'estensione:" FontWeight="Bold"/>
+            <StackPanel  Orientation="Horizontal" Margin="5" Spacing="10">
+                <RadioButton GroupName="Format" IsChecked="{Binding IsMp4Selected}" >.mp4</RadioButton>
+                <RadioButton GroupName="Format" IsChecked="{Binding IsMp3Selected}">.mp3</RadioButton>
+                <RadioButton GroupName="Format" IsChecked="{Binding IsWebmSelected}">.webm</RadioButton>
+            </StackPanel>  
+            
+            <TextBlock  Text="Seleziona il numero di file" FontWeight="Bold"/>
+            <StackPanel  Orientation="Horizontal" Margin="5" Spacing="10">
+                <RadioButton GroupName="numeroFile" IsChecked="{Binding IsSingleSelected}">Singolo</RadioButton>
+                <RadioButton GroupName="numeroFile" IsChecked="{Binding IsPlaylistSelected}">Playlist</RadioButton>
+            </StackPanel>    
+            
+            <StackPanel Margin="0,0,0,20" Spacing="10">
+    <TextBlock Text="Inserisci la cartella:" FontWeight="Bold"/>
+    <Grid ColumnDefinitions="*, Auto">
+        <TextBox Grid.Column="0" Text="{Binding PathCartella}" PlaceholderText="C:\Esempio\Di\Path"/>
+        <Button Grid.Column="1" Content="Sfoglia…" Click="BrowseButton_Click" Margin="5,0,0,0"/>
+    </Grid>
+    <TextBlock Text="Inserisci l'URL di YouTube:" FontWeight="Bold"/>
+    <TextBox Text="{Binding YoutubeUrl}" PlaceholderText="https://www.youtube.com/watch?..."/>
+</StackPanel>
+        
+        </StackPanel>
+        
+        <StackPanel Grid.Row="1" Spacing="10">
+            <StackPanel Margin="5,0,5,20" Spacing="10">
+
+            </StackPanel>
+
+        
+            <!-- Il comando 'DownloadCommand' gestirà sia l'avvio che lo stop -->
+            <Button Content="{Binding ButtonText}" 
+                    Command="{Binding DownloadCommand}"
+                    HorizontalAlignment="Stretch" 
+                    HorizontalContentAlignment="Center" 
+                    Margin="5,0,5,20"
+                    Classes.isDownloading="{Binding IsDownloading}">
+                <Button.Styles>
+                    <Style Selector="Button.isDownloading">
+                        <Setter Property="BorderBrush" Value="Red"/>
+                        <Setter Property="Background" Value="Transparent"/>
+                        <Setter Property="Foreground" Value="Red"/>
+                        <Setter Property="BorderThickness" Value="2"/>
+                    </Style>
+                    <Style Selector="Button.isDownloading:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+                        <Setter Property="Background" Value="Red"/>
+                        <Setter Property="BorderBrush" Value="White"/>
+                        <Setter Property="Foreground" Value="White"/>
+                    </Style>
+                </Button.Styles>
+            </Button>
+                    
+            <TextBlock Text="{Binding StatusText}" Foreground="Gray" HorizontalAlignment="Center"/>
+        </StackPanel>
+    </Grid>
+</Window>
