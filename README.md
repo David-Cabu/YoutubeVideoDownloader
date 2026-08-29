@@ -1,3 +1,9 @@
+<p align="center">
+  <img width="256" height="256" alt="favicon-6" src="https://github.com/user-attachments/assets/63a74903-0fa3-4333-9ac9-8a6ce1411833" />
+</p>
+
+
+
 # Youtube Video Downloader
 
 Un'applicazione desktop moderna e intuitiva sviluppata in **C# (Avalonia UI)** e **Python (yt-dlp)** che permette di scaricare video e brani musicali da YouTube con estrema facilità.
