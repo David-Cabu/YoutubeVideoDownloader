@@ -1,10 +1,14 @@
 <p align="center">
   <img width="256" height="256" alt="favicon-6" src="https://github.com/user-attachments/assets/63a74903-0fa3-4333-9ac9-8a6ce1411833" />
 </p>
-
-
-
 # Youtube Video Downloader
+
+![.NET](https://img.shields.io/badge/.NET-8.0-512BD4.svg?style=flat&logo=dotnet)
+![Avalonia UI](https://img.shields.io/badge/UI-Avalonia%20C%23-purple.svg?style=flat)
+![Python](https://img.shields.io/badge/Motore-Python%20%2B%20yt--dlp-blue.svg?style=flat&logo=python)
+![Platform](https://img.shields.io/badge/Piattaforma-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg?style=flat)
+
+<br/>
 
 Un'applicazione desktop moderna e intuitiva sviluppata in **C# (Avalonia UI)** e **Python (yt-dlp)** che permette di scaricare video e brani musicali da YouTube con estrema facilità.
 
@@ -50,3 +54,4 @@ Per creare in autonomia una release Linux (un singolo file eseguibile "Self-Cont
 ```bash
 dotnet publish -c Release -r linux-x64 --self-contained true /p:PublishSingleFile=true -o ../Release-Linux-SingleFile
 ```
+
