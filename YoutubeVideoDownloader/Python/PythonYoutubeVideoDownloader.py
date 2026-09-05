@@ -62,7 +62,7 @@ def ytopt(extension, fileNumber) -> dict[str, str | bool]:
         ytdplopt['merge_output_format'] = 'mp4'
 
     if extension == "2":
-        ytdplopt['format'] = 'bestaudio/best'
+        ytdplopt['format'] = 'bestaudio[ext=m4a]/bestaudio/best'
         ytdplopt['postprocessors'] = [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',

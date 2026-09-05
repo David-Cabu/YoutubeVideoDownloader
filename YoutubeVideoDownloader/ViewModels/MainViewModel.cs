@@ -7,11 +7,27 @@ namespace YoutubeVideoDownloader.ViewModels;
 
 public partial class MainViewModel : ViewModelBase
 {
+
+    void LogToFile(string message)
+    {
+        try
+        {
+            string logPath = Path.Combine(AppContext.BaseDirectory, "YoutubeVideoDownloaderLog.txt");
+            System.IO.File.AppendAllText(logPath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - {message}\n");
+        }
+        catch { /* Ignora errori di log */ }
+    }
     // Creando questo campo privato con [ObservableProperty], 
     // il toolkit genera in automatico la proprietà pubblica 'YoutubeUrl' collegabile alla grafica.
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsMp4Selected))]
+    [NotifyPropertyChangedFor(nameof(IsMp3Selected))]
+    [NotifyPropertyChangedFor(nameof(IsWebmSelected))]
     private string _estensione = "1";
+
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsSingleSelected))]
+    [NotifyPropertyChangedFor(nameof(IsPlaylistSelected))]
     private string _numeroFile = "s";
     [ObservableProperty]
     private string _pathCartella = "";
@@ -31,57 +47,62 @@ public partial class MainViewModel : ViewModelBase
 
     public bool IsMp4Selected
     {
-        get=>_estensione == "1";
+        get => Estensione == "1";
         set
         {
             if (value)
             {
-                _estensione = "1";
+                Estensione = "1";
+                LogToFile($"Estensione selezionata: {Estensione}");
             }
         }
     }
     public bool IsMp3Selected
     {
-        get=>_estensione == "2";
+        get => Estensione == "2";
         set
         {
             if (value)
             {
-                _estensione = "2";
+                Estensione = "2";
+                LogToFile($"Estensione selezionata: {Estensione}");
             }
         }
     }
     public bool IsWebmSelected
     {
-        get => _estensione == "3";
+        get => Estensione == "3";
         set
         {
             if (value)
             {
-                _estensione ="3";
+                Estensione = "3";
+                LogToFile($"Estensione selezionata: {Estensione}");
             }
         }
     }
     
     public bool IsSingleSelected
     {
-        get=>_numeroFile == "s";
+        get => NumeroFile == "s";
         set
         {
             if (value)
             {
-                _numeroFile = "s";
+                NumeroFile = "s";
+                LogToFile($"Numero file selezionato: {NumeroFile}");
             }
         }
     }
     public bool IsPlaylistSelected
     {
-        get=>_numeroFile == "p";
+        get => NumeroFile == "p";
         set
         {
             if (value)
             {
-                _numeroFile = "p";
+                NumeroFile = "p";
+                LogToFile($"Numero file selezionato: {NumeroFile}");
             }
         }
     }
@@ -101,6 +122,7 @@ public partial class MainViewModel : ViewModelBase
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
+            LogToFile($"Controllo dipendenze Linux: {checkInfo.FileName} {checkInfo.Arguments}");   
 
             using (Process checkProcess = Process.Start(checkInfo))
             {
@@ -172,7 +194,7 @@ public partial class MainViewModel : ViewModelBase
             // LOGICA WINDOWS: Usiamo l'eseguibile compilato
             string scriptPath = Path.Combine(cartellaBase, "Python", "PythonYoutubeVideoDownloader.exe");
             motoreAvvio = scriptPath; 
-            argomentiFinali = $"\"{_estensione}\" \"{_numeroFile}\" \"{PathCartella}\" \"{YoutubeUrl}\"";
+            argomentiFinali = $"\"{Estensione}\" \"{NumeroFile}\" \"{PathCartella}\" \"{YoutubeUrl}\"";
         }
         else
         {
@@ -181,18 +203,10 @@ public partial class MainViewModel : ViewModelBase
             string scriptPath = Path.Combine(cartellaBase, "Python", "PythonYoutubeVideoDownloader.py");
             motoreAvvio = "python3"; 
             // Attenzione all'ordine su Linux: prima lo script, poi le variabili!
-            argomentiFinali = $"\"{scriptPath}\" \"{_estensione}\" \"{_numeroFile}\" \"{PathCartella}\" \"{YoutubeUrl}\"";
+            argomentiFinali = $"\"{scriptPath}\" \"{Estensione}\" \"{NumeroFile}\" \"{PathCartella}\" \"{YoutubeUrl}\"";
         }
 
-        void LogToFile(string message)
-        {
-            try
-            {
-                string logPath = Path.Combine(AppContext.BaseDirectory, "YoutubeVideoDownloaderLog.txt");
-                System.IO.File.AppendAllText(logPath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - {message}\n");
-            }
-            catch { /* Ignora errori di log */ }
-        }
+
 
         ProcessStartInfo avvioPython = new ProcessStartInfo
         {
