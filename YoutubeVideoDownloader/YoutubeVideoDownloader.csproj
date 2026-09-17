@@ -7,6 +7,8 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <ApplicationIcon>Assets\favicon.ico</ApplicationIcon>
         <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+        <PublishSingleFile>true</PublishSingleFile>
+        <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
     </PropertyGroup>
 
     <ItemGroup>
@@ -40,4 +42,9 @@
         </PackageReference>
         <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     </ItemGroup>
+
+    <!-- Rimuove i file di debug delle librerie native grafiche dalla cartella publish -->
+    <Target Name="RemoveNativeSymbolsFromPublish" AfterTargets="Publish">
+        <Delete Files="$(PublishDir)libHarfBuzzSharp.pdb;$(PublishDir)libSkiaSharp.pdb" />
+    </Target>
 </Project>

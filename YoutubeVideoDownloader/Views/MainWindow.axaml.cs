@@ -12,6 +12,11 @@ public partial class MainWindow : Window
         InitializeComponent();
     }
 
+    private void InitializeComponent()
+    {
+        Avalonia.Markup.Xaml.AvaloniaXamlLoader.Load(this);
+    }
+
     private async void BrowseButton_Click(object? sender, RoutedEventArgs e)
     {
         var result = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions

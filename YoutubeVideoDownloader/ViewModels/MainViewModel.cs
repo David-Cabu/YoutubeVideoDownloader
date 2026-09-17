@@ -2,6 +2,10 @@ using System.Diagnostics;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using System.Runtime.InteropServices;
+using System.IO;
+using System.IO.Compression;
+using System.Net.Http;
+using System.Text.RegularExpressions;
 
 namespace YoutubeVideoDownloader.ViewModels;
 
@@ -15,7 +19,7 @@ public partial class MainViewModel : ViewModelBase
         {
             try
             {
-                string logPath = Path.Combine(AppContext.BaseDirectory, "YoutubeVideoDownloaderERRORS.txt");
+                string logPath = Path.Combine(AppContext.BaseDirectory, "YoutubeVideoDownloaderLog.log");
                 System.IO.File.AppendAllText(logPath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - {message}\n");
             }
             catch { /* Ignora errori di log */ }
@@ -24,7 +28,7 @@ public partial class MainViewModel : ViewModelBase
         {
             try
             {
-                string logPath = Path.Combine(AppContext.BaseDirectory, "YoutubeVideoDownloaderErrorLog.txt");
+                string logPath = Path.Combine(AppContext.BaseDirectory, "YoutubeVideoDownloaderERRORS.log");
                 System.IO.File.AppendAllText(logPath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - {message}\n");
             }
             catch { /* Ignora errori di log */ }
@@ -158,10 +162,100 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    private async Task ControllaDipendenzeLinuxAsync()
+    private bool IsFfmpegInPath()
     {
-        // Se siamo su Windows, usiamo l'exe e saltiamo tutto questo!
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return;
+        try
+        {
+            ProcessStartInfo check = new ProcessStartInfo
+            {
+                FileName = "where",
+                Arguments = "ffmpeg",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true
+            };
+            using var p = Process.Start(check);
+            p?.WaitForExit();
+            return p != null && p.ExitCode == 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private async Task ControllaDipendenzeWindowsAsync()
+    {
+        string cartellaPython = Path.Combine(AppContext.BaseDirectory, "Python");
+        string ffmpegExe = Path.Combine(cartellaPython, "ffmpeg.exe");
+
+        // Se ffmpeg esiste già nella cartella Python o nel PATH di sistema, non serve scaricare nulla
+        if (File.Exists(ffmpegExe) || IsFfmpegInPath())
+        {
+            return;
+        }
+
+        try
+        {
+            StatusText = "Primo avvio: download automatico di FFmpeg in corso...\nL'operazione potrebbe richiedere qualche minuto.";
+            LogToFile("Inizio download automatico di FFmpeg per Windows...", 1);
+
+            if (!Directory.Exists(cartellaPython))
+            {
+                Directory.CreateDirectory(cartellaPython);
+            }
+
+            string zipPath = Path.Combine(cartellaPython, "ffmpeg_temp.zip");
+            string downloadUrl = "https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip";
+
+            using (HttpClient client = new HttpClient())
+            {
+                client.Timeout = TimeSpan.FromMinutes(5);
+                using (var response = await client.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead))
+                {
+                    response.EnsureSuccessStatusCode();
+                    using (var stream = await response.Content.ReadAsStreamAsync())
+                    using (var fs = new FileStream(zipPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                    {
+                        await stream.CopyToAsync(fs);
+                    }
+                }
+            }
+
+            StatusText = "Estrazione di FFmpeg in corso...";
+            LogToFile("Estrazione ffmpeg.exe dallo zip...", 1);
+
+            using (ZipArchive archive = ZipFile.OpenRead(zipPath))
+            {
+                foreach (var entry in archive.Entries)
+                {
+                    if (entry.Name.Equals("ffmpeg.exe", StringComparison.OrdinalIgnoreCase))
+                    {
+                        entry.ExtractToFile(ffmpegExe, overwrite: true);
+                        break;
+                    }
+                }
+            }
+
+            try { File.Delete(zipPath); } catch { }
+
+            LogToFile("FFmpeg installato con successo in " + ffmpegExe, 1);
+            StatusText = "FFmpeg installato con successo!";
+        }
+        catch (Exception ex)
+        {
+            LogToFile($"Errore durante il download/estrazione di FFmpeg: {ex.Message}", 2);
+            StatusText = "Avviso: Impossibile scaricare FFmpeg automaticamente.";
+        }
+    }
+
+    private async Task ControllaDipendenzeAsync()
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            await ControllaDipendenzeWindowsAsync();
+            return;
+        }
 
         try
         {
@@ -221,9 +315,11 @@ public partial class MainViewModel : ViewModelBase
     private async Task Download()
     {
         int ErroriDownload = 0;
+        string currentPlaylistIndex = "";
+        string currentVideoTitle = "";
 
-        // {idcounterVideo:{Link,Formato,MessaggioErrore}}
-        Dictionary<int, Tuple<string, string, string>> videoInfo = new Dictionary<int, Tuple<string, string, string>>();
+        // {idcounterVideo:{Link, Formato, MessaggioErrore, IndicePlaylist, TitoloVideo}}
+        Dictionary<int, Tuple<string, string, string, string, string>> videoInfo = new Dictionary<int, Tuple<string, string, string, string, string>>();
 
         if (IsDownloading)
         {
@@ -243,8 +339,8 @@ public partial class MainViewModel : ViewModelBase
         IsDownloading = true;
         ButtonText = "Ferma Download";
 
-        // Aggiungi questa riga! Aspetterà in automatico che l'eventuale installazione finisca
-        await ControllaDipendenzeLinuxAsync();
+        // Aspetterà in automatico che l'eventuale download/installazione delle dipendenze finisca
+        await ControllaDipendenzeAsync();
 
         string cartellaBase = AppContext.BaseDirectory;
         string motoreAvvio = "";
@@ -293,6 +389,22 @@ public partial class MainViewModel : ViewModelBase
                     if (!string.IsNullOrWhiteSpace(e.Data))
                     {
                         LogToFile($"[PYTHON STDOUT]: {e.Data}", 1);
+
+                        // Tracciamo l'indice del video nella playlist (es. Downloading item 3 of 10 o Downloading video 3 of 10)
+                        Match playlistIdxMatch = Regex.Match(e.Data, @"Downloading (?:item|video)\s+(\d+)\s+of\s+(\d+)", RegexOptions.IgnoreCase);
+                        if (playlistIdxMatch.Success)
+                        {
+                            currentPlaylistIndex = $"{playlistIdxMatch.Groups[1].Value}/{playlistIdxMatch.Groups[2].Value}";
+                            currentVideoTitle = ""; // reset per il nuovo elemento
+                        }
+
+                        // Tracciamo il titolo se yt-dlp inizia il download o l'estrazione
+                        Match destMatch = Regex.Match(e.Data, @"Destination:\s+.*?[\\/](.+?)\.(?:f\d+\.)?[a-zA-Z0-9]+$", RegexOptions.IgnoreCase);
+                        if (destMatch.Success)
+                        {
+                            currentVideoTitle = destMatch.Groups[1].Value;
+                        }
+
                         // C# CERCA IL TAG SPECIALE
                         if (e.Data.Contains("[VIDEO_ERRORE]"))
                         {
@@ -306,9 +418,19 @@ public partial class MainViewModel : ViewModelBase
                             string formatoErr = errrerParti.Length > 1 ? errrerParti[1] : Estensione;
                             string msgErr = errrerParti.Length > 2 ? errrerParti[2] : motivoErrore;
 
+                            // Se è presente l'ID del singolo video nell'errore (es. [youtube] XVyDuUCGKSU: Private video), ricava il link del singolo video
+                            Match idMatch = Regex.Match(msgErr, @"\[youtube\]\s+([a-zA-Z0-9_-]{11})");
+                            if (idMatch.Success)
+                            {
+                                linkErr = $"https://www.youtube.com/watch?v={idMatch.Groups[1].Value}";
+                            }
+
+                            string titoloFinale = !string.IsNullOrWhiteSpace(currentVideoTitle) ? currentVideoTitle : "[Titolo non disponibile o Privato]";
+                            string indiceFinale = !string.IsNullOrWhiteSpace(currentPlaylistIndex) ? currentPlaylistIndex : "N/D";
+
                             lock (videoInfo)
                             {
-                                videoInfo[ErroriDownload] = Tuple.Create(linkErr, formatoErr, msgErr);
+                                videoInfo[ErroriDownload] = Tuple.Create(linkErr, formatoErr, msgErr, indiceFinale, titoloFinale);
                             }
 
                             StatusText = $"Errore su un video (Totali: {ErroriDownload}). Passo al prossimo...";
@@ -335,9 +457,18 @@ public partial class MainViewModel : ViewModelBase
                             string formatoErr = errrerParti.Length > 1 ? errrerParti[1] : Estensione;
                             string msgErr = errrerParti.Length > 2 ? errrerParti[2] : motivoErrore;
 
+                            Match idMatch = Regex.Match(msgErr, @"\[youtube\]\s+([a-zA-Z0-9_-]{11})");
+                            if (idMatch.Success)
+                            {
+                                linkErr = $"https://www.youtube.com/watch?v={idMatch.Groups[1].Value}";
+                            }
+
+                            string titoloFinale = !string.IsNullOrWhiteSpace(currentVideoTitle) ? currentVideoTitle : "[Titolo non disponibile o Privato]";
+                            string indiceFinale = !string.IsNullOrWhiteSpace(currentPlaylistIndex) ? currentPlaylistIndex : "N/D";
+
                             lock (videoInfo)
                             {
-                                videoInfo[ErroriDownload] = Tuple.Create(linkErr, formatoErr, msgErr);
+                                videoInfo[ErroriDownload] = Tuple.Create(linkErr, formatoErr, msgErr, indiceFinale, titoloFinale);
                             }
                         }
                     }
@@ -370,7 +501,7 @@ public partial class MainViewModel : ViewModelBase
         LogToFile("Video falliti: ", 2);
         foreach (var item in videoInfo)
         {
-            LogToFile($"- Link: {item.Value.Item1} | Formato: {item.Value.Item2} | Errore: {item.Value.Item3}", 2);
+            LogToFile($"[Traccia: {item.Value.Item4}] Titolo: {item.Value.Item5} | Link: {item.Value.Item1} | Formato: {item.Value.Item2} | Errore: {item.Value.Item3}", 2);
         }
     }
 }

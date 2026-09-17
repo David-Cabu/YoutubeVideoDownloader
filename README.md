@@ -13,7 +13,7 @@
 
 Un'applicazione desktop moderna e intuitiva sviluppata in **C# (Avalonia UI)** e **Python (yt-dlp)** che permette di scaricare video e brani musicali da YouTube con estrema facilità.
 
-## ✨ Funzionalità e Opzioni
+## 🌟 Funzionalità e Opzioni
 
 Questa applicazione è stata progettata per rendere il processo di download accessibile a chiunque tramite un'interfaccia grafica pulita, rimuovendo la necessità di interagire con riga di comando.
 
@@ -26,7 +26,12 @@ Questa applicazione è stata progettata per rendere il processo di download acce
   - **Singolo:** Scarica esclusivamente il video specifico indicato dall'URL.
   - **Playlist:** Se l'URL fa parte di una playlist o è un link a una playlist intera, l'applicazione scaricherà in blocco tutti i video contenuti, inserendoli in una cartella apposita.
 - **Interruzione in tempo reale:** Se hai avviato un download per errore o vuoi fermarlo, il tasto di scaricamento diventerà rosso. Cliccandolo interromperai immediatamente il processo di download in modo sicuro.
-- **Logica Intelligente per le Dipendenze (Linux):** Sotto al cofano, il motore Python controllerà autonomamente la presenza di `yt-dlp` aggiornato, `pip` e `ffmpeg`. In caso di componenti mancanti, il programma aprirà un popup grafico nativo chiedendo la password e installerà le dipendenze in modo completamente trasparente.
+- **Logica Intelligente per le Dipendenze:** 
+  - **Windows:** Scarica ed estrae automaticamente l'eseguibile di `ffmpeg` da GitHub al primo avvio, se mancante, in modo del tutto invisibile.
+  - **Linux:** Il motore Python controlla autonomamente la presenza di `yt-dlp` aggiornato, `pip` e `ffmpeg`. In caso di componenti mancanti, il programma aprirà un popup chiedendo i permessi per installare le dipendenze in modo trasparente.
+- **Gestione Avanzata degli Errori (Novità!):**
+  - Tracciamento accurato degli indici (es. `1/10`) e del titolo del video durante i download di playlist.
+  - Se un video all'interno di una playlist risulta non scaricabile (es. video privato o non disponibile), l'errore viene catturato in modo pulito nei file di log (`YoutubeVideoDownloaderERRORS.log`) ricostruendo il link del video esatto per facilitare l'ispezione dell'utente, senza interrompere la playlist.
 
 ## 🚀 Come avviare il programma
 
@@ -51,8 +56,14 @@ Per avviarlo con il doppio clic, fai così:
 
 ## 🛠️ Come Compilare dal Sorgente
 
-Per creare in autonomia una release Linux (un singolo file eseguibile "Self-Contained" che include tutto), apri un terminale, entra nella cartella `YoutubeVideoDownloader` e lancia il comando:
-```bash
-dotnet publish -c Release -r linux-x64 --self-contained true /p:PublishSingleFile=true -o ../Release-Linux-SingleFile
+Per creare in autonomia una release singola (un eseguibile "Self-Contained" che include tutto senza dipendenze aggiuntive), apri un terminale, entra nella cartella `YoutubeVideoDownloader` e lancia il comando appropriato per il tuo sistema:
+
+### Windows
+```powershell
+dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false
 ```
 
+### Linux
+```bash
+dotnet publish -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false
+```
