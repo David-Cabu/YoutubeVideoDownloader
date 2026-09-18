@@ -29,7 +29,9 @@ Questa applicazione è stata progettata per rendere il processo di download acce
 - **Logica Intelligente per le Dipendenze:** 
   - **Windows:** Scarica ed estrae automaticamente l'eseguibile di `ffmpeg` da GitHub al primo avvio, se mancante, in modo del tutto invisibile.
   - **Linux:** Il motore Python controlla autonomamente la presenza di `yt-dlp` aggiornato, `pip` e `ffmpeg`. In caso di componenti mancanti, il programma aprirà un popup chiedendo i permessi per installare le dipendenze in modo trasparente.
-- **Gestione Avanzata degli Errori (Novità!):**
+- **Gestione Avanzata degli Errori e Nuove Funzioni (Novità!):**
+  - **Fallback Intelligente:** Se il download di un video fallisce in un formato specifico (es. `.mp4`), il programma proverà automaticamente a scaricarlo negli altri formati disponibili (es. `.mp3` o `.webm`) per garantirti sempre un risultato.
+  - **Pulsanti Log Rapidi:** Sono stati aggiunti due pulsanti direttamente nell'interfaccia utente per aprire con un clic i file di log standard e i log degli errori, facilitando il controllo dei download problematici.
   - Tracciamento accurato degli indici (es. `1/10`) e del titolo del video durante i download di playlist.
   - Se un video all'interno di una playlist risulta non scaricabile (es. video privato o non disponibile), l'errore viene catturato in modo pulito nei file di log (`YoutubeVideoDownloaderERRORS.log`) ricostruendo il link del video esatto per facilitare l'ispezione dell'utente, senza interrompere la playlist.
 
@@ -70,5 +72,5 @@ dotnet publish -c Release -r linux-x64 --self-contained true -p:PublishSingleFil
 oppure:
 
 ```bash
-~/.dotnet/dotnet publish -c Release -r linux-x64 --self-contained true /p:PublishSingleFile=true
+dotnet publish -c Release -r linux-x64 --self-contained true /p:PublishSingleFile=true
 ```
