@@ -67,3 +67,8 @@ dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=
 ```bash
 dotnet publish -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false
 ```
+oppure:
+
+```bash
+~/.dotnet/dotnet publish -c Release -r linux-x64 --self-contained true /p:PublishSingleFile=true
+```

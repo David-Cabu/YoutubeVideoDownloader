@@ -33,6 +33,70 @@ public partial class MainViewModel : ViewModelBase
             catch { /* Ignora errori di log */ }
         }
     }
+
+    [RelayCommand]
+    private void OpenLogDirectory()
+    {
+        if(System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            try
+            {
+                string logPath = Path.Combine(AppContext.BaseDirectory, "YoutubeVideoDownloaderLog.log");
+                Process.Start("explorer.exe", $"/select,\"{logPath}\"");
+            }
+        catch { /* Ignora errori di log */ }
+        }
+        else if(System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        {
+            try
+            {
+                string logPath = Path.Combine(AppContext.BaseDirectory, "YoutubeVideoDownloaderLog.log");
+                Process.Start("xdg-open", logPath);
+            }
+        catch { /* Ignora errori di log */ }
+        }
+        else if(System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        {
+            try
+            {
+                string logPath = Path.Combine(AppContext.BaseDirectory, "YoutubeVideoDownloaderLog.log");
+                Process.Start("open", logPath);
+            }
+        catch { /* Ignora errori di log */ }
+        }
+    }
+    
+    [RelayCommand]
+    private void OpenErrorLogDirectory()
+    {
+        if(System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            try
+            {
+                string logPath = Path.Combine(AppContext.BaseDirectory, "YoutubeVideoDownloaderERRORS.log");
+                Process.Start("explorer.exe", $"/select,\"{logPath}\"");
+            }
+        catch { /* Ignora errori di log */ }
+        }
+        else if(System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        {
+            try
+            {
+                string logPath = Path.Combine(AppContext.BaseDirectory, "YoutubeVideoDownloaderERRORS.log");
+                Process.Start("xdg-open", logPath);
+            }
+        catch { /* Ignora errori di log */ }
+        }
+        else if(System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        {
+            try
+            {
+                string logPath = Path.Combine(AppContext.BaseDirectory, "YoutubeVideoDownloaderERRORS.log");
+                Process.Start("open", logPath);
+            }
+        catch { /* Ignora errori di log */ }
+        }
+    }
     #region UI Bindings
     private string _estensione = "1";
     public string Estensione

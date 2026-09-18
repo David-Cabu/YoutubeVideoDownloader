@@ -53,7 +53,7 @@
                     Command="{Binding DownloadCommand}"
                     HorizontalAlignment="Stretch" 
                     HorizontalContentAlignment="Center" 
-                    Margin="5,0,5,20"
+                    Margin="5,0,5,1"
                     Classes.isDownloading="{Binding IsDownloading}">
                 <Button.Styles>
                     <Style Selector="Button.isDownloading">
@@ -69,6 +69,11 @@
                     </Style>
                 </Button.Styles>
             </Button>
+            <Grid Margin="5,0,5,1" ColumnDefinitions="*,*">
+                <Button Grid.Column="0" Content="Apri Logs" Command="{Binding OpenLogDirectoryCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="0,0,5,0"/>
+                <Button Grid.Column="1" Content="Apri Error Log" Command="{Binding OpenErrorLogDirectoryCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="5,0,0,0"/>
+            </Grid>
+
                     
             <TextBlock Text="{Binding StatusText}" Foreground="{Binding StatusColor}" HorizontalAlignment="Center"/>
         </StackPanel>
