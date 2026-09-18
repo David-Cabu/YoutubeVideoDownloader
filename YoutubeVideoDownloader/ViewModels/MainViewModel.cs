@@ -12,7 +12,6 @@ namespace YoutubeVideoDownloader.ViewModels;
 public partial class MainViewModel : ViewModelBase
 {
 
-
     void LogToFile(string message, int fileType)
     {
         if (fileType == 1)
@@ -34,6 +33,7 @@ public partial class MainViewModel : ViewModelBase
             catch { /* Ignora errori di log */ }
         }
     }
+    #region UI Bindings
     private string _estensione = "1";
     public string Estensione
     {
@@ -48,7 +48,6 @@ public partial class MainViewModel : ViewModelBase
             }
         }
     }
-
     private string _numeroFile = "s";
     public string NumeroFile
     {
@@ -62,44 +61,47 @@ public partial class MainViewModel : ViewModelBase
             }
         }
     }
-
     private string _pathCartella = "";
     public string PathCartella
     {
         get => _pathCartella;
         set => SetProperty(ref _pathCartella, value);
     }
-
     private string _youtubeUrl = "";
     public string YoutubeUrl
     {
         get => _youtubeUrl;
         set => SetProperty(ref _youtubeUrl, value);
     }
-
     private string _statusText = "Pronto per scaricare";
     public string StatusText
     {
         get => _statusText;
         set => SetProperty(ref _statusText, value);
     }
-
+    private string _statusColor = "Gray";
+    public string StatusColor
+    {
+        get => _statusColor;
+        set => SetProperty(ref _statusColor, value);
+    }
     private bool _isDownloading = false;
     public bool IsDownloading
     {
         get => _isDownloading;
         set => SetProperty(ref _isDownloading, value);
     }
-
     private string _buttonText = "Scarica Video";
     public string ButtonText
     {
         get => _buttonText;
         set => SetProperty(ref _buttonText, value);
     }
-
     private Process? _currentProcess;
-
+    private int _erroriDownload = 0;
+    private string _currentPlaylistIndex = "";
+    private string _currentVideoTitle = "";
+    private readonly Dictionary<int, Tuple<string, string, string, string, string>> _videoInfo = new();
     public bool IsMp4Selected
     {
         get => Estensione == "1";
@@ -136,7 +138,6 @@ public partial class MainViewModel : ViewModelBase
             }
         }
     }
-
     public bool IsSingleSelected
     {
         get => NumeroFile == "s";
@@ -161,7 +162,7 @@ public partial class MainViewModel : ViewModelBase
             }
         }
     }
-
+    #endregion
     private bool IsFfmpegInPath()
     {
         try
@@ -248,7 +249,6 @@ public partial class MainViewModel : ViewModelBase
             StatusText = "Avviso: Impossibile scaricare FFmpeg automaticamente.";
         }
     }
-
     private async Task ControllaDipendenzeAsync()
     {
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
@@ -308,47 +308,10 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-
-    // Con [RelayCommand], viene generato automaticamente il comando 'DownloadCommand' collegabile al Button
-    // AllowConcurrentExecutions permette di cliccare il bottone anche mentre il task è in esecuzione (per fermarlo)
-    [RelayCommand(AllowConcurrentExecutions = true)]
-    private async Task Download()
+    private (string MotoreAvvio, string ArgomentiFinali) GetScriptOS(string cartellaBase, string pathCartellaSicuro, string YoutubeUrl)
     {
-        int ErroriDownload = 0;
-        string currentPlaylistIndex = "";
-        string currentVideoTitle = "";
-
-        // {idcounterVideo:{Link, Formato, MessaggioErrore, IndicePlaylist, TitoloVideo}}
-        Dictionary<int, Tuple<string, string, string, string, string>> videoInfo = new Dictionary<int, Tuple<string, string, string, string, string>>();
-
-        if (IsDownloading)
-        {
-            if (_currentProcess != null && !_currentProcess.HasExited)
-            {
-                try { _currentProcess.Kill(true); } catch { }
-            }
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(YoutubeUrl) || string.IsNullOrWhiteSpace(PathCartella))
-        {
-            StatusText = "Inserisci un URL e una cartella validi!";
-            return;
-        }
-
-        IsDownloading = true;
-        ButtonText = "Ferma Download";
-
-        // Aspetterà in automatico che l'eventuale download/installazione delle dipendenze finisca
-        await ControllaDipendenzeAsync();
-
-        string cartellaBase = AppContext.BaseDirectory;
         string motoreAvvio = "";
         string argomentiFinali = "";
-
-        string pathCartellaSicuro = PathCartella.Trim().TrimEnd('\\', '/');
-
-        // C# chiede: "Siamo su Windows?"
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
             // LOGICA WINDOWS: Usiamo l'eseguibile compilato
@@ -365,9 +328,197 @@ public partial class MainViewModel : ViewModelBase
             // Attenzione all'ordine su Linux: prima lo script, poi le variabili!
             argomentiFinali = $"\"{scriptPath}\" \"{Estensione}\" \"{NumeroFile}\" \"{pathCartellaSicuro}\" \"{YoutubeUrl}\"";
         }
+        return (motoreAvvio, argomentiFinali);
+    }
 
+    private void GestioneSTDOUT(Process process)
+    {
+        process.OutputDataReceived += (sender, e) =>
+        {
+            if (!string.IsNullOrWhiteSpace(e.Data))
+            {
+                LogToFile($"[PYTHON STDOUT]: {e.Data}", 1);
 
+                // Tracciamo l'indice del video nella playlist (es. Downloading item 3 of 10 o Downloading video 3 of 10)
+                Match playlistIdxMatch = Regex.Match(e.Data, @"Downloading (?:item|video)\s+(\d+)\s+of\s+(\d+)", RegexOptions.IgnoreCase);
+                if (playlistIdxMatch.Success)
+                {
+                    _currentPlaylistIndex = $"{playlistIdxMatch.Groups[1].Value}/{playlistIdxMatch.Groups[2].Value}";
+                    _currentVideoTitle = ""; // reset per il nuovo elemento
+                }
 
+                // Tracciamo il titolo se yt-dlp inizia il download o l'estrazione
+                Match destMatch = Regex.Match(e.Data, @"Destination:\s+.*?[\\/](.+?)\.(?:f\d+\.)?[a-zA-Z0-9]+$", RegexOptions.IgnoreCase);
+                if (destMatch.Success)
+                {
+                    _currentVideoTitle = destMatch.Groups[1].Value;
+                }
+
+                // C# CERCA IL TAG SPECIALE
+                if (e.Data.Contains("[VIDEO_ERRORE]"))
+                {
+                    _erroriDownload++; // Aumenta il contatore
+
+                    // Rimuove la parola "[VIDEO_ERRORE]" per tenere solo i dati dell'errore
+                    string motivoErrore = e.Data.Replace("[VIDEO_ERRORE]", "").Trim();
+
+                    string[] errrerParti = motivoErrore.Split(' ', 3);
+                    string linkErr = errrerParti.Length > 0 ? errrerParti[0] : YoutubeUrl;
+                    string formatoErr = errrerParti.Length > 1 ? errrerParti[1] : Estensione;
+                    string msgErr = errrerParti.Length > 2 ? errrerParti[2] : motivoErrore;
+
+                    // Se è presente l'ID del singolo video nell'errore (es. [youtube] XVyDuUCGKSU: Private video), ricava il link del singolo video
+                    Match idMatch = Regex.Match(msgErr, @"\[youtube\]\s+([a-zA-Z0-9_-]{11})");
+                    if (idMatch.Success)
+                    {
+                        linkErr = $"https://www.youtube.com/watch?v={idMatch.Groups[1].Value}";
+                    }
+
+                    string titoloFinale = !string.IsNullOrWhiteSpace(_currentVideoTitle) ? _currentVideoTitle : "[Titolo non disponibile o Privato]";
+                    string indiceFinale = !string.IsNullOrWhiteSpace(_currentPlaylistIndex) ? _currentPlaylistIndex : "N/D";
+
+                    lock (_videoInfo)
+                    {
+                        _videoInfo[_erroriDownload] = Tuple.Create(linkErr, formatoErr, msgErr, indiceFinale, titoloFinale);
+                    }
+
+                    StatusText = $"Errore su un video (Totali: {_erroriDownload}). Passo al prossimo...";
+                    StatusColor = "Orange";
+                }
+                else
+                {
+                    // Se è output normale (es: percentuale di download)
+                    StatusText = e.Data;
+                    StatusColor = "Gray";
+                }
+            }
+        };
+    }
+    private void GestioneSTDERR(Process process)
+    {
+        process.ErrorDataReceived += (sender, e) =>
+        {
+            if (!string.IsNullOrWhiteSpace(e.Data))
+            {
+                LogToFile($"[PYTHON STDERR]: {e.Data}", 2);
+                if (e.Data.Contains("[VIDEO_ERRORE]"))
+                {
+                    _erroriDownload++;
+                    string motivoErrore = e.Data.Replace("[VIDEO_ERRORE]", "").Trim();
+                    string[] errrerParti = motivoErrore.Split(' ', 3);
+                    string linkErr = errrerParti.Length > 0 ? errrerParti[0] : YoutubeUrl;
+                    string formatoErr = errrerParti.Length > 1 ? errrerParti[1] : Estensione;
+                    string msgErr = errrerParti.Length > 2 ? errrerParti[2] : motivoErrore;
+
+                    Match idMatch = Regex.Match(msgErr, @"\[youtube\]\s+([a-zA-Z0-9_-]{11})");
+                    if (idMatch.Success)
+                    {
+                        linkErr = $"https://www.youtube.com/watch?v={idMatch.Groups[1].Value}";
+                    }
+
+                    string titoloFinale = !string.IsNullOrWhiteSpace(_currentVideoTitle) ? _currentVideoTitle : "[Titolo non disponibile o Privato]";
+                    string indiceFinale = !string.IsNullOrWhiteSpace(_currentPlaylistIndex) ? _currentPlaylistIndex : "N/D";
+
+                    lock (_videoInfo)
+                    {
+                        _videoInfo[_erroriDownload] = Tuple.Create(linkErr, formatoErr, msgErr, indiceFinale, titoloFinale);
+                    }
+                }
+            }
+        };
+    }
+
+    private void setStatustext(string totVideo, int errori, int exitcode)
+    {
+        if (exitcode != 0)
+        {
+            StatusText = "Download fermato / Errore!";
+            StatusColor = "Red";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(totVideo) || !totVideo.Contains('/'))
+        {
+            if (errori > 0)
+            {
+                StatusText = $"Download completato con {errori} errori.";
+                StatusColor = "Orange";
+            }
+            else
+            {
+                StatusText = "Download terminato!";
+                StatusColor = "Green";
+            }
+            return;
+        }
+
+        string[] index = totVideo.Split('/');
+        if (int.TryParse(index[1], out int total))
+        {
+            if (errori >= total)
+            {
+                StatusText = "Download fermato / Errore!";
+                StatusColor = "Red";
+            }
+            else if (errori > 0)
+            {
+                StatusText = $"Download terminato! Video scaricati con successo: {total - errori}/{total}";
+                StatusColor = "Orange";
+            }
+            else
+            {
+                StatusText = $"Download terminato! Video scaricati con successo: {total}/{total}";
+                StatusColor = "Green";
+            }
+        }
+        else
+        {
+            StatusText = errori == 0 ? "Download terminato!" : "Download terminato con errori!";
+            StatusColor = errori == 0 ? "Green" : "Orange";
+        }
+    }
+
+    // Con [RelayCommand], viene generato automaticamente il comando 'DownloadCommand' collegabile al Button
+    // AllowConcurrentExecutions permette di cliccare il bottone anche mentre il task è in esecuzione (per fermarlo)
+    [RelayCommand(AllowConcurrentExecutions = true)]
+    private async Task Download()
+    {
+        if (IsDownloading)
+        {
+            if (_currentProcess != null && !_currentProcess.HasExited)
+            {
+                try { _currentProcess.Kill(true); } catch { }
+            }
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(YoutubeUrl) || string.IsNullOrWhiteSpace(PathCartella))
+        {
+            StatusText = "Inserisci un URL e una cartella validi!";
+            StatusColor = "Red";
+            return;
+        }
+
+        IsDownloading = true;
+        ButtonText = "Ferma Download";
+        StatusColor = "Gray";
+
+        _erroriDownload = 0;
+        _currentPlaylistIndex = "";
+        _currentVideoTitle = "";
+        lock (_videoInfo)
+        {
+            _videoInfo.Clear();
+        }
+
+        // Aspetterà in automatico che l'eventuale download/installazione delle dipendenze finisca
+        await ControllaDipendenzeAsync();
+
+        string cartellaBase = AppContext.BaseDirectory;
+        string pathCartellaSicuro = PathCartella.Trim().TrimEnd('\\', '/');
+
+        // Avvio di python in base al S.O.
+        var (motoreAvvio, argomentiFinali) = GetScriptOS(cartellaBase, pathCartellaSicuro, YoutubeUrl);
         ProcessStartInfo avvioPython = new ProcessStartInfo
         {
             FileName = motoreAvvio,
@@ -377,102 +528,17 @@ public partial class MainViewModel : ViewModelBase
             RedirectStandardOutput = true,
             RedirectStandardError = true
         };
+
         try
         {
             LogToFile($"Avvio processo: {motoreAvvio} con argomenti: {argomentiFinali}", 1);
             using (Process process = new Process { StartInfo = avvioPython })
             {
                 _currentProcess = process;
-                // 3. Creiamo le "spie" che ascoltano Python in tempo reale
-                process.OutputDataReceived += (sender, e) =>
-                {
-                    if (!string.IsNullOrWhiteSpace(e.Data))
-                    {
-                        LogToFile($"[PYTHON STDOUT]: {e.Data}", 1);
 
-                        // Tracciamo l'indice del video nella playlist (es. Downloading item 3 of 10 o Downloading video 3 of 10)
-                        Match playlistIdxMatch = Regex.Match(e.Data, @"Downloading (?:item|video)\s+(\d+)\s+of\s+(\d+)", RegexOptions.IgnoreCase);
-                        if (playlistIdxMatch.Success)
-                        {
-                            currentPlaylistIndex = $"{playlistIdxMatch.Groups[1].Value}/{playlistIdxMatch.Groups[2].Value}";
-                            currentVideoTitle = ""; // reset per il nuovo elemento
-                        }
-
-                        // Tracciamo il titolo se yt-dlp inizia il download o l'estrazione
-                        Match destMatch = Regex.Match(e.Data, @"Destination:\s+.*?[\\/](.+?)\.(?:f\d+\.)?[a-zA-Z0-9]+$", RegexOptions.IgnoreCase);
-                        if (destMatch.Success)
-                        {
-                            currentVideoTitle = destMatch.Groups[1].Value;
-                        }
-
-                        // C# CERCA IL TAG SPECIALE
-                        if (e.Data.Contains("[VIDEO_ERRORE]"))
-                        {
-                            ErroriDownload++; // Aumenta il contatore
-
-                            // Rimuove la parola "[VIDEO_ERRORE]" per tenere solo i dati dell'errore
-                            string motivoErrore = e.Data.Replace("[VIDEO_ERRORE]", "").Trim();
-
-                            string[] errrerParti = motivoErrore.Split(' ', 3);
-                            string linkErr = errrerParti.Length > 0 ? errrerParti[0] : YoutubeUrl;
-                            string formatoErr = errrerParti.Length > 1 ? errrerParti[1] : Estensione;
-                            string msgErr = errrerParti.Length > 2 ? errrerParti[2] : motivoErrore;
-
-                            // Se è presente l'ID del singolo video nell'errore (es. [youtube] XVyDuUCGKSU: Private video), ricava il link del singolo video
-                            Match idMatch = Regex.Match(msgErr, @"\[youtube\]\s+([a-zA-Z0-9_-]{11})");
-                            if (idMatch.Success)
-                            {
-                                linkErr = $"https://www.youtube.com/watch?v={idMatch.Groups[1].Value}";
-                            }
-
-                            string titoloFinale = !string.IsNullOrWhiteSpace(currentVideoTitle) ? currentVideoTitle : "[Titolo non disponibile o Privato]";
-                            string indiceFinale = !string.IsNullOrWhiteSpace(currentPlaylistIndex) ? currentPlaylistIndex : "N/D";
-
-                            lock (videoInfo)
-                            {
-                                videoInfo[ErroriDownload] = Tuple.Create(linkErr, formatoErr, msgErr, indiceFinale, titoloFinale);
-                            }
-
-                            StatusText = $"Errore su un video (Totali: {ErroriDownload}). Passo al prossimo...";
-                        }
-                        else
-                        {
-                            // Se è output normale (es: percentuale di download)
-                            StatusText = e.Data;
-                        }
-                    }
-                };
-
-                process.ErrorDataReceived += (sender, e) =>
-                {
-                    if (!string.IsNullOrWhiteSpace(e.Data))
-                    {
-                        LogToFile($"[PYTHON STDERR]: {e.Data}", 2);
-                        if (e.Data.Contains("[VIDEO_ERRORE]"))
-                        {
-                            ErroriDownload++;
-                            string motivoErrore = e.Data.Replace("[VIDEO_ERRORE]", "").Trim();
-                            string[] errrerParti = motivoErrore.Split(' ', 3);
-                            string linkErr = errrerParti.Length > 0 ? errrerParti[0] : YoutubeUrl;
-                            string formatoErr = errrerParti.Length > 1 ? errrerParti[1] : Estensione;
-                            string msgErr = errrerParti.Length > 2 ? errrerParti[2] : motivoErrore;
-
-                            Match idMatch = Regex.Match(msgErr, @"\[youtube\]\s+([a-zA-Z0-9_-]{11})");
-                            if (idMatch.Success)
-                            {
-                                linkErr = $"https://www.youtube.com/watch?v={idMatch.Groups[1].Value}";
-                            }
-
-                            string titoloFinale = !string.IsNullOrWhiteSpace(currentVideoTitle) ? currentVideoTitle : "[Titolo non disponibile o Privato]";
-                            string indiceFinale = !string.IsNullOrWhiteSpace(currentPlaylistIndex) ? currentPlaylistIndex : "N/D";
-
-                            lock (videoInfo)
-                            {
-                                videoInfo[ErroriDownload] = Tuple.Create(linkErr, formatoErr, msgErr, indiceFinale, titoloFinale);
-                            }
-                        }
-                    }
-                };
+                // 3. Colleghiamo le spie che ascoltano Python in tempo reale
+                GestioneSTDOUT(process);
+                GestioneSTDERR(process);
 
                 // 4. Avviamo il processo e l'ascolto
                 LogToFile("Processo avviato, in attesa dell'output...", 1);
@@ -483,14 +549,18 @@ public partial class MainViewModel : ViewModelBase
                 // 5. Aspettiamo che finisca, MA senza bloccare la grafica!
                 await process.WaitForExitAsync();
 
-                LogToFile($"Processo terminato con codice: {process.ExitCode}", 1);
-                StatusText = process.ExitCode == 0 ? "Download terminato!" : "Download fermato / Errore!";
+                LogToFile($"Processo terminato con codice: {process.ExitCode}", process.ExitCode == 0 ? 1 : 2);
+                string playlistInfo = !string.IsNullOrWhiteSpace(_currentPlaylistIndex)
+                    ? _currentPlaylistIndex
+                    : (_videoInfo.Count > 0 && _videoInfo.TryGetValue(0, out var info) ? info.Item4 : "");
+                setStatustext(playlistInfo, _erroriDownload, process.ExitCode);
             }
         }
         catch (System.Exception ex)
         {
             LogToFile($"ECCEZIONE C#: {ex.Message}", 2);
             StatusText = $"Errore nell'avvio di Python.\nErrore: {ex.Message}";
+            StatusColor = "Red";
         }
         finally
         {
@@ -498,10 +568,17 @@ public partial class MainViewModel : ViewModelBase
             IsDownloading = false;
             ButtonText = "Scarica Video";
         }
-        LogToFile("Video falliti: ", 2);
-        foreach (var item in videoInfo)
+
+        lock (_videoInfo)
         {
-            LogToFile($"[Traccia: {item.Value.Item4}] Titolo: {item.Value.Item5} | Link: {item.Value.Item1} | Formato: {item.Value.Item2} | Errore: {item.Value.Item3}", 2);
+            if (_videoInfo.Count > 0)
+            {
+                LogToFile("Video falliti: ", 2);
+                foreach (var item in _videoInfo)
+                {
+                    LogToFile($"[Traccia: {item.Value.Item4}] Titolo: {item.Value.Item5} | Link: {item.Value.Item1} | Formato: {item.Value.Item2} | Errore: {item.Value.Item3}", 2);
+                }
+            }
         }
     }
 }

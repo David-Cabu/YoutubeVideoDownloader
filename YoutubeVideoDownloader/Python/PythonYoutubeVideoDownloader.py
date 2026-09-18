@@ -7,6 +7,12 @@ import subprocess
 import shutil
 import sys
 
+# Forza stdout e stderr in UTF-8
+if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+if sys.stderr and hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+
 class MyLogger:
     def debug(self, msg):
         # yt-dlp manda i progressi del download qui. Li stampiamo normalmente.

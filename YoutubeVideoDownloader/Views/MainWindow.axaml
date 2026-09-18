@@ -70,7 +70,7 @@
                 </Button.Styles>
             </Button>
                     
-            <TextBlock Text="{Binding StatusText}" Foreground="Gray" HorizontalAlignment="Center"/>
+            <TextBlock Text="{Binding StatusText}" Foreground="{Binding StatusColor}" HorizontalAlignment="Center"/>
         </StackPanel>
     </Grid>
 </Window>
