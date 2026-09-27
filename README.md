@@ -28,9 +28,10 @@ Questa applicazione è stata progettata per rendere il processo di download acce
 - **Interruzione in tempo reale:** Se hai avviato un download per errore o vuoi fermarlo, il tasto di scaricamento diventerà rosso. Cliccandolo interromperai immediatamente il processo di download in modo sicuro.
 - **Logica Intelligente per le Dipendenze:** 
   - **Windows:** Scarica ed estrae automaticamente l'eseguibile di `ffmpeg` da GitHub al primo avvio, se mancante, in modo del tutto invisibile.
-  - **Linux:** Il motore Python controlla autonomamente la presenza di `yt-dlp` aggiornato, `pip` e `ffmpeg`. In caso di componenti mancanti, il programma aprirà un popup chiedendo i permessi per installare le dipendenze in modo trasparente.
+  - **Linux e macOS:** Il motore Python controlla autonomamente la presenza di `yt-dlp` aggiornato, `pip`, `ffmpeg` e **`Node.js`** (necessario per aggirare i recenti blocchi anti-bot di YouTube). In caso di componenti mancanti, il programma aprirà un popup chiedendo i permessi per installare le dipendenze in modo trasparente.
 - **Gestione Avanzata degli Errori e Nuove Funzioni (Novità!):**
   - **Fallback Intelligente:** Se il download di un video fallisce in un formato specifico (es. `.mp4`), il programma proverà automaticamente a scaricarlo negli altri formati disponibili (es. `.mp3` o `.webm`) per garantirti sempre un risultato.
+  - **Protezione Nomi File Lunghi:** I nomi dei video troppo lunghi (frequente con titoli giapponesi o con font speciali) vengono troncati in modo intelligente a 150 caratteri, prevenendo i crash del sistema operativo (come l'errore `Errno 36 File name too long` su Linux).
   - **Pulsanti Log Rapidi:** Sono stati aggiunti due pulsanti direttamente nell'interfaccia utente per aprire con un clic i file di log standard e i log degli errori, facilitando il controllo dei download problematici.
   - Tracciamento accurato degli indici (es. `1/10`) e del titolo del video durante i download di playlist.
   - Se un video all'interno di una playlist risulta non scaricabile (es. video privato o non disponibile), l'errore viene catturato in modo pulito nei file di log (`YoutubeVideoDownloaderERRORS.log`) ricostruendo il link del video esatto per facilitare l'ispezione dell'utente, senza interrompere la playlist.
@@ -64,6 +65,7 @@ Per creare in autonomia una release singola (un eseguibile "Self-Contained" che 
 ```powershell
 dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false
 ```
+> **Nota per sviluppatori su Windows:** Su Windows, l'applicazione si appoggia all'eseguibile pre-compilato `PythonYoutubeVideoDownloader.exe` che trovi nella cartella `Python`. Se apporti modifiche al file `.py`, dovrai prima ricreare quell'eseguibile usando PyInstaller (`pyinstaller --onefile PythonYoutubeVideoDownloader.py`).
 
 ### Linux
 ```bash
@@ -74,3 +76,10 @@ oppure:
 ```bash
 dotnet publish -c Release -r linux-x64 --self-contained true /p:PublishSingleFile=true
 ```
+
+### macOS
+Per compilare per i Mac più recenti (Apple Silicon):
+```bash
+dotnet publish -c Release -r osx-arm64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+```
+*(Se devi compilare per i vecchi Mac con processore Intel, usa `-r osx-x64` invece di `osx-arm64`).*

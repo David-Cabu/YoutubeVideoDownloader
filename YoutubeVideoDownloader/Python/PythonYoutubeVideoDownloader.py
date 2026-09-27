@@ -62,12 +62,21 @@ def installDependencies():
 
     # 3. CONTROLLO FFMPEG
     if shutil.which('ffmpeg') is None:
-        print('FFMPEG non trovato. Insallazione in corso')
+        print('FFMPEG non trovato. Installazione in corso...')
         try:
             subprocess.run(['pkexec', 'sh', '-c', 'apt update && apt install -y ffmpeg'], check=True)
-            print('FFMPEG Installato con successo!')
+            print('FFMPEG installato con successo!')
         except subprocess.CalledProcessError:
-            raise Exception('Imposibile installare ffmpeg. Inserisci la password corretta o installalo manualmente')
+            raise Exception('Impossibile installare ffmpeg. Inserisci la password corretta o installalo manualmente')
+
+    # 4. CONTROLLO NODEJS (richiesto da yt-dlp per alcuni video)
+    if shutil.which('node') is None and shutil.which('nodejs') is None:
+        print('Node.js non trovato. Installazione in corso (necessario per alcuni video)...')
+        try:
+            subprocess.run(['pkexec', 'sh', '-c', 'apt update && apt install -y nodejs'], check=True)
+            print('Node.js installato con successo!')
+        except subprocess.CalledProcessError:
+            print('Impossibile installare Node.js automaticamente. Potrebbero fallire alcuni download.')
 
 
 def ytopt(extension, fileNumber, logger=None) -> dict[str, str | bool]:
@@ -77,6 +86,7 @@ def ytopt(extension, fileNumber, logger=None) -> dict[str, str | bool]:
         'no_warnings': True,
         'nocheckcertificate': True,
         'ignoreerrors':True,
+        'trim_file_name': 150,
         'logger': logger if logger is not None else MyLogger()
     }
 
@@ -102,12 +112,12 @@ def ytopt(extension, fileNumber, logger=None) -> dict[str, str | bool]:
         ytdplopt['outtmpl'] = '%(title)s.%(ext)s'
         ytdplopt['noplaylist'] = True
         
-#    ytdplopt['extractor_args'] = {
-#        'youtube': {
-#            "player_client": ["android", "ios"],
-#            "player_skip": ["web"],
-#        }
-#    }
+    ytdplopt['extractor_args'] = {
+        'youtube': {
+            "player_client": ["ios", "android", "web"],
+            "player_skip": ["webpage", "default"],
+        }
+    }
 
     return ytdplopt
 
@@ -174,6 +184,9 @@ if __name__ == '__main__':
                 if m:
                     fail_url = f"https://www.youtube.com/watch?v={m.group(1)}"
                 else:
+                    if fileNumber == "p":
+                        print(f"Skipping fallback for unknown video error in playlist: {err_msg}", flush=True)
+                        continue
                     fail_url = url
                 
                 success = False
