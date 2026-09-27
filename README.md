@@ -65,7 +65,8 @@ Per creare in autonomia una release singola (un eseguibile "Self-Contained" che 
 ```powershell
 dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false
 ```
-> **Nota per sviluppatori su Windows:** Su Windows, l'applicazione si appoggia all'eseguibile pre-compilato `PythonYoutubeVideoDownloader.exe` che trovi nella cartella `Python`. Se apporti modifiche al file `.py`, dovrai prima ricreare quell'eseguibile usando PyInstaller (`pyinstaller --onefile PythonYoutubeVideoDownloader.py`).
+> **Nota per sviluppatori su Windows:** Su Windows, l'applicazione si appoggia all'eseguibile pre-compilato `PythonYoutubeVideoDownloader.exe` che trovi nella cartella `Python`. Se apporti modifiche al file `.py`, dovrai prima ricreare quell'eseguibile usando PyInstaller (`python -m PyInstaller --onefile --distpath Python --workpath Python/build --specpath Python Python/PythonYoutubeVideoDownloader.py; Remove-Item -Recurse -Force Python/build, Python/PythonYoutubeVideoDownloader.spec
+`).
 
 ### Linux
 ```bash
