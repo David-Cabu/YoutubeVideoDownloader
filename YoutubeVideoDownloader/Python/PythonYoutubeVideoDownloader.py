@@ -70,13 +70,14 @@ def installDependencies():
             raise Exception('Impossibile installare ffmpeg. Inserisci la password corretta o installalo manualmente')
 
     # 4. CONTROLLO NODEJS (richiesto da yt-dlp per alcuni video)
-    if shutil.which('node') is None and shutil.which('nodejs') is None:
-        print('Node.js non trovato. Installazione in corso (necessario per alcuni video)...')
-        try:
-            subprocess.run(['pkexec', 'sh', '-c', 'apt update && apt install -y nodejs'], check=True)
-            print('Node.js installato con successo!')
-        except subprocess.CalledProcessError:
-            print('Impossibile installare Node.js automaticamente. Potrebbero fallire alcuni download.')
+    node_path = shutil.which('node') or shutil.which('nodejs')
+    if node_path is None:
+        base_dir = os.path.dirname(os.path.abspath(sys.executable if getattr(sys, 'frozen', False) else __file__))
+        local_node = os.path.join(base_dir, 'node')
+        if os.path.isfile(local_node) and os.access(local_node, os.X_OK):
+            node_path = local_node
+    if node_path is None:
+        print('Node.js non trovato nel PATH né nella cartella locale. Alcuni download potrebbero fallire.')
 
 
 def ytopt(extension, fileNumber, logger=None, cookie_arg=None) -> dict[str, str | bool]:
@@ -87,7 +88,8 @@ def ytopt(extension, fileNumber, logger=None, cookie_arg=None) -> dict[str, str 
         'nocheckcertificate': True,
         'ignoreerrors': True,
         'trim_file_name': 150,
-        'logger': logger if logger is not None else MyLogger()
+        'logger': logger if logger is not None else MyLogger(),   
+        'remote_components': ['ejs:github'], 
     }
 
     # Controllo presenza cookies.txt nella cartella dello script/exe o nella cartella di destinazione
@@ -176,15 +178,26 @@ if __name__ == '__main__':
             except:
                 pass
 
-        import shutil
-        node_path = shutil.which('node')
+        # Cerca node: prima nella cartella locale dello script, poi nel PATH di sistema
+        base_dir = os.path.dirname(os.path.abspath(sys.executable if getattr(sys, 'frozen', False) else __file__))
+        local_node = os.path.join(base_dir, 'node')        # Linux/macOS
+        local_node_win = os.path.join(base_dir, 'node.exe') # Windows
+
+        if os.path.isfile(local_node) and os.access(local_node, os.X_OK):
+            node_path = local_node
+        elif os.path.isfile(local_node_win):
+            node_path = local_node_win
+        else:
+            node_path = shutil.which('node')
+
         if node_path:
-            import subprocess
             try:
                 subprocess.check_output([node_path, '--version'])
                 options['js_runtimes'] = {'node': {'path': node_path}}
+                print(f"Node.js trovato: {node_path}", flush=True)
             except Exception:
                 pass
+
         yt_dlp.YoutubeDL(options).download([url])
 
         if main_logger.errors:
@@ -220,6 +233,9 @@ if __name__ == '__main__':
                     fb_logger = MyLogger()
                     opts_fb = ytopt(fb_ext, fileNumber, fb_logger, cookie_arg)
                     
+                    if node_path:                                                    # ← AGGIUNTA
+                        opts_fb['js_runtimes'] = {'node': {'path': node_path}}   
+
                     if fileNumber == "p" and playlist_title != "NA":
                         # Inietta il titolo della playlist al posto della variabile per mantenere la cartella
                         # Attenzione: i caratteri speciali non saranno sanitizzati come farebbe yt-dlp nativamente,

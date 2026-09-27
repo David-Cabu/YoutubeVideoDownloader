@@ -377,6 +377,110 @@ public partial class MainViewModel : ViewModelBase
             }
         }
     }
+
+    private async Task ControllaDipendenzeLinuxNodeAsync()
+    {
+        string cartellaPython = Path.Combine(AppContext.BaseDirectory, "Python");
+        string nodeExe = Path.Combine(cartellaPython, "node");
+
+        if (File.Exists(nodeExe)) return; // già presente
+
+        // Controlla se è già nel PATH di sistema con versione sufficiente
+        try
+        {
+            var checkVer = new ProcessStartInfo
+            {
+                FileName = "node",
+                Arguments = "--version",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true
+            };
+            using var p = Process.Start(checkVer);
+            if (p != null)
+            {
+                string ver = await p.StandardOutput.ReadToEndAsync();
+                await p.WaitForExitAsync();
+                if (p.ExitCode == 0)
+                {
+                    // Estrai il major: "v22.1.0" -> 22
+                    var match = System.Text.RegularExpressions.Regex.Match(ver.Trim(), @"v(\d+)");
+                    if (match.Success && int.TryParse(match.Groups[1].Value, out int major) && major >= 22)
+                        return; // Node.js >= 22 già presente nel sistema
+                }
+            }
+        }
+        catch { }
+
+        // Node.js assente o troppo vecchio → lo scarichiamo come binario
+        try
+        {
+            StatusText = "Primo avvio: download automatico di Node.js per Linux in corso...";
+            LogToFile("Inizio download Node.js binario per Linux...", 1);
+
+            if (!Directory.Exists(cartellaPython))
+                Directory.CreateDirectory(cartellaPython);
+
+            // Archivio tar.gz del binario ufficiale
+            string nodeUrl = "https://nodejs.org/dist/v22.17.1/node-v22.17.1-linux-x64.tar.gz";
+            string tarPath = Path.Combine(cartellaPython, "node_linux_temp.tar.gz");
+
+            using (HttpClient client = new HttpClient { Timeout = TimeSpan.FromMinutes(5) })
+            using (var response = await client.GetAsync(nodeUrl, HttpCompletionOption.ResponseHeadersRead))
+            {
+                response.EnsureSuccessStatusCode();
+                using var stream = await response.Content.ReadAsStreamAsync();
+                using var fs = new FileStream(tarPath, FileMode.Create, FileAccess.Write, FileShare.None);
+                await stream.CopyToAsync(fs);
+            }
+
+            StatusText = "Estrazione Node.js in corso...";
+            LogToFile("Estrazione node dal tar.gz...", 1);
+
+            // Estraiamo solo il binario node con tar (disponibile su qualsiasi Linux)
+            string extractDir = Path.Combine(cartellaPython, "node_extract_tmp");
+            Directory.CreateDirectory(extractDir);
+
+            var tar = new ProcessStartInfo
+            {
+                FileName = "tar",
+                Arguments = $"-xzf \"{tarPath}\" -C \"{extractDir}\" --wildcards \"*/bin/node\" --strip-components=2",
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            using (var p = Process.Start(tar))
+                await p!.WaitForExitAsync();
+
+            string extractedNode = Path.Combine(extractDir, "node");
+            if (File.Exists(extractedNode))
+            {
+                File.Move(extractedNode, nodeExe, overwrite: true);
+                // Rendi eseguibile
+                var chmod = new ProcessStartInfo
+                {
+                    FileName = "chmod",
+                    Arguments = $"+x \"{nodeExe}\"",
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+                using var cp = Process.Start(chmod);
+                await cp!.WaitForExitAsync();
+            }
+
+            // Pulizia
+            try { File.Delete(tarPath); } catch { }
+            try { Directory.Delete(extractDir, true); } catch { }
+
+            LogToFile("Node.js installato con successo in " + nodeExe, 1);
+            StatusText = "Node.js installato con successo!";
+        }
+        catch (Exception ex)
+        {
+            LogToFile($"Errore download Node.js Linux: {ex.Message}", 2);
+            StatusText = "Avviso: impossibile scaricare Node.js automaticamente.";
+        }
+    }
+
     private async Task ControllaDipendenzeAsync()
     {
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
@@ -387,11 +491,10 @@ public partial class MainViewModel : ViewModelBase
 
         try
         {
-            // 1. Controlliamo se yt-dlp è già presente
             ProcessStartInfo checkInfo = new ProcessStartInfo
             {
                 FileName = "python3",
-                Arguments = "-c \"import yt_dlp\"", // Tenta di importare la libreria
+                Arguments = "-c \"import yt_dlp\"",
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
@@ -402,31 +505,24 @@ public partial class MainViewModel : ViewModelBase
                 if (checkProcess != null)
                 {
                     await checkProcess.WaitForExitAsync();
-                    if (checkProcess.ExitCode == 0)
+                    if (checkProcess.ExitCode != 0)
                     {
-                        // ExitCode 0 significa che non ci sono stati errori. yt-dlp esiste!
-                        return;
+                        // yt-dlp manca, lo installiamo
+                        StatusText = "Primo avvio: Installazione moduli necessari in corso...";
+                        ProcessStartInfo installInfo = new ProcessStartInfo
+                        {
+                            FileName = "python3",
+                            Arguments = "-m pip install --user yt-dlp",
+                            UseShellExecute = false,
+                            CreateNoWindow = true
+                        };
+                        using (Process? installProcess = Process.Start(installInfo))
+                        {
+                            if (installProcess != null)
+                                await installProcess.WaitForExitAsync();
+                        }
                     }
-                }
-            }
-
-            // 2. Se arriviamo qui, yt-dlp manca. Avvisiamo l'utente e lo installiamo.
-            StatusText = "Primo avvio: Installazione moduli necessari in corso...";
-
-            ProcessStartInfo installInfo = new ProcessStartInfo
-            {
-                FileName = "python3",
-                // Usiamo --user per non chiedere i permessi di amministratore (root) a Linux
-                Arguments = "-m pip install --user yt-dlp",
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-
-            using (Process? installProcess = Process.Start(installInfo))
-            {
-                if (installProcess != null)
-                {
-                    await installProcess.WaitForExitAsync();
+                    // yt-dlp OK (o appena installato) → si prosegue SEMPRE
                 }
             }
         }
@@ -434,6 +530,9 @@ public partial class MainViewModel : ViewModelBase
         {
             StatusText = "Impossibile verificare o installare le dipendenze Linux.";
         }
+
+        // ← Chiamato SEMPRE, indipendentemente dallo stato di yt-dlp
+        await ControllaDipendenzeLinuxNodeAsync();
     }
 
     private (string MotoreAvvio, string ArgomentiFinali) GetScriptOS(string cartellaBase, string pathCartellaSicuro, string YoutubeUrl, string cookieArg)
