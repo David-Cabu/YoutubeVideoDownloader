@@ -149,6 +149,13 @@ public partial class MainViewModel : ViewModelBase
         get => _statusColor;
         set => SetProperty(ref _statusColor, value);
     }
+    private string _selectedBrowser = "Nessuno";
+    public string SelectedBrowser
+    {
+        get => _selectedBrowser;
+        set => SetProperty(ref _selectedBrowser, value);
+    }
+    public string[] AvailableBrowsers { get; } = new[] { "Nessuno", "Chrome", "Edge", "Firefox", "Brave", "Opera", "Safari", "Vivaldi" };
     private bool _isDownloading = false;
     public bool IsDownloading
     {
@@ -248,69 +255,126 @@ public partial class MainViewModel : ViewModelBase
             return false;
         }
     }
+    private bool IsNodeInPath()
+    {
+        try
+        {
+            ProcessStartInfo check = new ProcessStartInfo
+            {
+                FileName = "where",
+                Arguments = "node",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true
+            };
+            using var p = Process.Start(check);
+            p?.WaitForExit();
+            return p != null && p.ExitCode == 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
 
     private async Task ControllaDipendenzeWindowsAsync()
     {
         string cartellaPython = Path.Combine(AppContext.BaseDirectory, "Python");
         string ffmpegExe = Path.Combine(cartellaPython, "ffmpeg.exe");
 
-        // Se ffmpeg esiste già nella cartella Python o nel PATH di sistema, non serve scaricare nulla
-        if (File.Exists(ffmpegExe) || IsFfmpegInPath())
+        if (!File.Exists(ffmpegExe) && !IsFfmpegInPath())
         {
-            return;
-        }
-
-        try
-        {
-            StatusText = "Primo avvio: download automatico di FFmpeg in corso...\nL'operazione potrebbe richiedere qualche minuto.";
-            LogToFile("Inizio download automatico di FFmpeg per Windows...", 1);
-
-            if (!Directory.Exists(cartellaPython))
+            try
             {
-                Directory.CreateDirectory(cartellaPython);
-            }
+                StatusText = "Primo avvio: download automatico di FFmpeg in corso...\nL'operazione potrebbe richiedere qualche minuto.";
+                LogToFile("Inizio download automatico di FFmpeg per Windows...", 1);
 
-            string zipPath = Path.Combine(cartellaPython, "ffmpeg_temp.zip");
-            string downloadUrl = "https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip";
-
-            using (HttpClient client = new HttpClient())
-            {
-                client.Timeout = TimeSpan.FromMinutes(5);
-                using (var response = await client.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead))
+                if (!Directory.Exists(cartellaPython))
                 {
-                    response.EnsureSuccessStatusCode();
-                    using (var stream = await response.Content.ReadAsStreamAsync())
-                    using (var fs = new FileStream(zipPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                    Directory.CreateDirectory(cartellaPython);
+                }
+
+                string zipPath = Path.Combine(cartellaPython, "ffmpeg_temp.zip");
+                string downloadUrl = "https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip";
+
+                using (HttpClient client = new HttpClient())
+                {
+                    client.Timeout = TimeSpan.FromMinutes(5);
+                    using (var response = await client.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead))
                     {
-                        await stream.CopyToAsync(fs);
+                        response.EnsureSuccessStatusCode();
+                        using (var stream = await response.Content.ReadAsStreamAsync())
+                        using (var fs = new FileStream(zipPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                        {
+                            await stream.CopyToAsync(fs);
+                        }
                     }
                 }
-            }
 
-            StatusText = "Estrazione di FFmpeg in corso...";
-            LogToFile("Estrazione ffmpeg.exe dallo zip...", 1);
+                StatusText = "Estrazione di FFmpeg in corso...";
+                LogToFile("Estrazione ffmpeg.exe dallo zip...", 1);
 
-            using (ZipArchive archive = ZipFile.OpenRead(zipPath))
-            {
-                foreach (var entry in archive.Entries)
+                using (ZipArchive archive = ZipFile.OpenRead(zipPath))
                 {
-                    if (entry.Name.Equals("ffmpeg.exe", StringComparison.OrdinalIgnoreCase))
+                    foreach (var entry in archive.Entries)
                     {
-                        entry.ExtractToFile(ffmpegExe, overwrite: true);
-                        break;
+                        if (entry.Name.Equals("ffmpeg.exe", StringComparison.OrdinalIgnoreCase))
+                        {
+                            entry.ExtractToFile(ffmpegExe, overwrite: true);
+                            break;
+                        }
                     }
                 }
+
+                try { File.Delete(zipPath); } catch { }
+
+                LogToFile("FFmpeg installato con successo in " + ffmpegExe, 1);
+                StatusText = "FFmpeg installato con successo!";
             }
-
-            try { File.Delete(zipPath); } catch { }
-
-            LogToFile("FFmpeg installato con successo in " + ffmpegExe, 1);
-            StatusText = "FFmpeg installato con successo!";
+            catch (Exception ex)
+            {
+                LogToFile($"Errore durante il download/estrazione di FFmpeg: {ex.Message}", 2);
+                StatusText = "Avviso: Impossibile scaricare FFmpeg automaticamente.";
+            }
         }
-        catch (Exception ex)
+        
+        string nodeExe = Path.Combine(cartellaPython, "node.exe");
+        if (!File.Exists(nodeExe))
         {
-            LogToFile($"Errore durante il download/estrazione di FFmpeg: {ex.Message}", 2);
-            StatusText = "Avviso: Impossibile scaricare FFmpeg automaticamente.";
+            try
+            {
+                StatusText = "Primo avvio: download automatico di Node.js in corso...\nL'operazione potrebbe richiedere un minuto.";
+                LogToFile("Inizio download automatico di Node.js per Windows...", 1);
+
+                if (!Directory.Exists(cartellaPython))
+                {
+                    Directory.CreateDirectory(cartellaPython);
+                }
+
+                string nodeUrl = "https://nodejs.org/dist/v22.17.1/win-x64/node.exe";
+
+                using (HttpClient client = new HttpClient())
+                {
+                    client.Timeout = TimeSpan.FromMinutes(5);
+                    using (var response = await client.GetAsync(nodeUrl, HttpCompletionOption.ResponseHeadersRead))
+                    {
+                        response.EnsureSuccessStatusCode();
+                        using (var stream = await response.Content.ReadAsStreamAsync())
+                        using (var fs = new FileStream(nodeExe, FileMode.Create, FileAccess.Write, FileShare.None))
+                        {
+                            await stream.CopyToAsync(fs);
+                        }
+                    }
+                }
+                
+                LogToFile("Node.js installato con successo in " + nodeExe, 1);
+                StatusText = "Node.js installato con successo!";
+            }
+            catch (Exception ex)
+            {
+                LogToFile($"Errore durante il download di Node.js: {ex.Message}", 2);
+                StatusText = "Avviso: Impossibile scaricare Node.js automaticamente.";
+            }
         }
     }
     private async Task ControllaDipendenzeAsync()
@@ -372,7 +436,7 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    private (string MotoreAvvio, string ArgomentiFinali) GetScriptOS(string cartellaBase, string pathCartellaSicuro, string YoutubeUrl)
+    private (string MotoreAvvio, string ArgomentiFinali) GetScriptOS(string cartellaBase, string pathCartellaSicuro, string YoutubeUrl, string cookieArg)
     {
         string motoreAvvio = "";
         string argomentiFinali = "";
@@ -381,7 +445,7 @@ public partial class MainViewModel : ViewModelBase
             // LOGICA WINDOWS: Usiamo l'eseguibile compilato
             string scriptPath = Path.Combine(cartellaBase, "Python", "PythonYoutubeVideoDownloader.exe");
             motoreAvvio = scriptPath;
-            argomentiFinali = $"\"{Estensione}\" \"{NumeroFile}\" \"{pathCartellaSicuro}\" \"{YoutubeUrl}\"";
+            argomentiFinali = $"\"{Estensione}\" \"{NumeroFile}\" \"{pathCartellaSicuro}\" \"{YoutubeUrl}\" \"{cookieArg}\"";
         }
         else
         {
@@ -390,7 +454,7 @@ public partial class MainViewModel : ViewModelBase
             string scriptPath = Path.Combine(cartellaBase, "Python", "PythonYoutubeVideoDownloader.py");
             motoreAvvio = "python3";
             // Attenzione all'ordine su Linux: prima lo script, poi le variabili!
-            argomentiFinali = $"\"{scriptPath}\" \"{Estensione}\" \"{NumeroFile}\" \"{pathCartellaSicuro}\" \"{YoutubeUrl}\"";
+            argomentiFinali = $"\"{scriptPath}\" \"{Estensione}\" \"{NumeroFile}\" \"{pathCartellaSicuro}\" \"{YoutubeUrl}\" \"{cookieArg}\"";
         }
         return (motoreAvvio, argomentiFinali);
     }
@@ -580,9 +644,10 @@ public partial class MainViewModel : ViewModelBase
 
         string cartellaBase = AppContext.BaseDirectory;
         string pathCartellaSicuro = PathCartella.Trim().TrimEnd('\\', '/');
+        string cookieArg = SelectedBrowser == "Nessuno" ? "none" : SelectedBrowser;
 
         // Avvio di python in base al S.O.
-        var (motoreAvvio, argomentiFinali) = GetScriptOS(cartellaBase, pathCartellaSicuro, YoutubeUrl);
+        var (motoreAvvio, argomentiFinali) = GetScriptOS(cartellaBase, pathCartellaSicuro, YoutubeUrl, cookieArg);
         ProcessStartInfo avvioPython = new ProcessStartInfo
         {
             FileName = motoreAvvio,
@@ -592,6 +657,12 @@ public partial class MainViewModel : ViewModelBase
             RedirectStandardOutput = true,
             RedirectStandardError = true
         };
+        // Aggiungo la cartella Python al PATH in modo che yt-dlp trovi node.exe e ffmpeg.exe
+        string cartellaPython = Path.Combine(cartellaBase, "Python");
+        if (Directory.Exists(cartellaPython))
+        {
+            avvioPython.EnvironmentVariables["PATH"] = cartellaPython + ";" + Environment.GetEnvironmentVariable("PATH");
+        }
 
         try
         {

@@ -30,6 +30,9 @@
                 <RadioButton GroupName="numeroFile" IsChecked="{Binding IsPlaylistSelected}">Playlist</RadioButton>
             </StackPanel>    
             
+            <TextBlock Text="Seleziona browser per i cookie (opzionale):" FontWeight="Bold"/>
+            <ComboBox ItemsSource="{Binding AvailableBrowsers}" SelectedItem="{Binding SelectedBrowser}" Margin="5,0,0,10" Width="150"/>
+            
             <StackPanel Margin="0,0,0,20" Spacing="10">
     <TextBlock Text="Inserisci la cartella:" FontWeight="Bold"/>
     <Grid ColumnDefinitions="*, Auto">

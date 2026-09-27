@@ -23,3 +23,14 @@ Thumbs.db
 publish/
 **/publish/
 publish/
+
+# PyInstaller build artifacts
+build/
+*.spec.bak
+
+# Runtime log files
+YoutubeVideoDownloaderERRORS.log
+YoutubeVideoDownloaderLog.log
+
+# yt-dlp debug/scratch files
+YoutubeVideoDownloader/ytdlp_*.txt

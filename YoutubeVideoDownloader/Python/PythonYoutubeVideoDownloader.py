@@ -79,16 +79,29 @@ def installDependencies():
             print('Impossibile installare Node.js automaticamente. Potrebbero fallire alcuni download.')
 
 
-def ytopt(extension, fileNumber, logger=None) -> dict[str, str | bool]:
+def ytopt(extension, fileNumber, logger=None, cookie_arg=None) -> dict[str, str | bool]:
     ytdplopt = {
         "format": "bestvideo[ext=webm]+bestaudio[ext=webm]/best[ext=webm]",
         'merge_output_format': 'webm',
         'no_warnings': True,
         'nocheckcertificate': True,
-        'ignoreerrors':True,
+        'ignoreerrors': True,
         'trim_file_name': 150,
         'logger': logger if logger is not None else MyLogger()
     }
+
+    # Controllo presenza cookies.txt nella cartella dello script/exe o nella cartella di destinazione
+    base_dir = os.path.dirname(os.path.abspath(sys.executable if getattr(sys, 'frozen', False) else __file__))
+    local_cookie = os.path.join(base_dir, "cookies.txt")
+    
+    if cookie_arg and os.path.exists(cookie_arg):
+        ytdplopt['cookiefile'] = cookie_arg
+    elif cookie_arg and cookie_arg.lower() in ['chrome', 'edge', 'firefox', 'brave', 'opera', 'safari', 'vivaldi']:
+        ytdplopt['cookiesfrombrowser'] = (cookie_arg.lower(),)
+    elif os.path.exists(local_cookie):
+        ytdplopt['cookiefile'] = local_cookie
+    elif path and os.path.exists(os.path.join(path, "cookies.txt")):
+        ytdplopt['cookiefile'] = os.path.join(path, "cookies.txt")
 
     if path != "":
         ytdplopt['paths'] = {'home': path}
@@ -112,10 +125,10 @@ def ytopt(extension, fileNumber, logger=None) -> dict[str, str | bool]:
         ytdplopt['outtmpl'] = '%(title)s.%(ext)s'
         ytdplopt['noplaylist'] = True
         
+    # Il path di node verrà impostato nel __main__ dopo il rilevamento
     ytdplopt['extractor_args'] = {
         'youtube': {
-            "player_client": ["ios", "android", "web"],
-            "player_skip": ["webpage", "default"],
+            "player_client": ["tv", "android", "ios", "web"],
         }
     }
 
@@ -132,6 +145,7 @@ if __name__ == '__main__':
     fileNumber = sys.argv[2]
     path = sys.argv[3]
     url = sys.argv[4]
+    cookie_arg = sys.argv[5] if len(sys.argv) > 5 else None
     try:
         if sys.platform != 'win32' and not getattr(sys, 'frozen', False):
             installDependencies()
@@ -147,7 +161,7 @@ if __name__ == '__main__':
         from yt_dlp.utils import DownloadError
 
         main_logger = MyLogger()
-        options = ytopt(extension, fileNumber, main_logger)
+        options = ytopt(extension, fileNumber, main_logger, cookie_arg)
 
         print(f"Dati passati:{options}")
         
@@ -162,6 +176,15 @@ if __name__ == '__main__':
             except:
                 pass
 
+        import shutil
+        node_path = shutil.which('node')
+        if node_path:
+            import subprocess
+            try:
+                subprocess.check_output([node_path, '--version'])
+                options['js_runtimes'] = {'node': {'path': node_path}}
+            except Exception:
+                pass
         yt_dlp.YoutubeDL(options).download([url])
 
         if main_logger.errors:
@@ -195,7 +218,7 @@ if __name__ == '__main__':
                     fb_format_name = format_name_map.get(fb_ext, fb_ext)
                     print(f"Tentativo di fallback con formato {fb_format_name} per: {fail_url}", flush=True)
                     fb_logger = MyLogger()
-                    opts_fb = ytopt(fb_ext, fileNumber, fb_logger)
+                    opts_fb = ytopt(fb_ext, fileNumber, fb_logger, cookie_arg)
                     
                     if fileNumber == "p" and playlist_title != "NA":
                         # Inietta il titolo della playlist al posto della variabile per mantenere la cartella

@@ -27,7 +27,7 @@ Questa applicazione è stata progettata per rendere il processo di download acce
   - **Playlist:** Se l'URL fa parte di una playlist o è un link a una playlist intera, l'applicazione scaricherà in blocco tutti i video contenuti, inserendoli in una cartella apposita.
 - **Interruzione in tempo reale:** Se hai avviato un download per errore o vuoi fermarlo, il tasto di scaricamento diventerà rosso. Cliccandolo interromperai immediatamente il processo di download in modo sicuro.
 - **Logica Intelligente per le Dipendenze:** 
-  - **Windows:** Scarica ed estrae automaticamente l'eseguibile di `ffmpeg` da GitHub al primo avvio, se mancante, in modo del tutto invisibile.
+  - **Windows:** Scarica ed estrae automaticamente l'eseguibile di `ffmpeg` da GitHub e **`Node.js`** (v22+, necessario per aggirare i blocchi anti-bot di YouTube) al primo avvio, se mancanti, in modo del tutto invisibile. Non è richiesta alcuna installazione manuale.
   - **Linux e macOS:** Il motore Python controlla autonomamente la presenza di `yt-dlp` aggiornato, `pip`, `ffmpeg` e **`Node.js`** (necessario per aggirare i recenti blocchi anti-bot di YouTube). In caso di componenti mancanti, il programma aprirà un popup chiedendo i permessi per installare le dipendenze in modo trasparente.
 - **Gestione Avanzata degli Errori e Nuove Funzioni (Novità!):**
   - **Fallback Intelligente:** Se il download di un video fallisce in un formato specifico (es. `.mp4`), il programma proverà automaticamente a scaricarlo negli altri formati disponibili (es. `.mp3` o `.webm`) per garantirti sempre un risultato.
@@ -65,8 +65,11 @@ Per creare in autonomia una release singola (un eseguibile "Self-Contained" che 
 ```powershell
 dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false
 ```
-> **Nota per sviluppatori su Windows:** Su Windows, l'applicazione si appoggia all'eseguibile pre-compilato `PythonYoutubeVideoDownloader.exe` che trovi nella cartella `Python`. Se apporti modifiche al file `.py`, dovrai prima ricreare quell'eseguibile usando PyInstaller (`python -m PyInstaller --onefile --distpath Python --workpath Python/build --specpath Python Python/PythonYoutubeVideoDownloader.py; Remove-Item -Recurse -Force Python/build, Python/PythonYoutubeVideoDownloader.spec
-`).
+> **Nota per sviluppatori su Windows:** Su Windows, l'applicazione si appoggia all'eseguibile pre-compilato `PythonYoutubeVideoDownloader.exe` che trovi nella cartella `Python`. Se apporti modifiche al file `.py`, dovrai prima ricreare quell'eseguibile usando il file `.spec` incluso nel progetto:
+> ```powershell
+> python -m PyInstaller --distpath Python PythonYoutubeVideoDownloader.spec
+> ```
+> Il file `.spec` include già tutti gli hidden imports necessari (yt-dlp, yt-dlp-ejs, websockets, ecc.).
 
 ### Linux
 ```bash
