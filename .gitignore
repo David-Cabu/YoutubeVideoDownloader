@@ -34,3 +34,7 @@ YoutubeVideoDownloaderLog.log
 
 # yt-dlp debug/scratch files
 YoutubeVideoDownloader/ytdlp_*.txt
+# Large binary dependencies (auto-downloaded at runtime)
+**/Python/ffmpeg.exe
+**/Python/node.exe
+**/Python/node.EXE
